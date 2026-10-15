@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan to add Email, Kategori Instansi, Kelompok/Kelas, and Instansi/Alamat fields to the guest model, PublicRegisterView, GuestModal, and DigitalTicketCard.",
+  "updatedAt": "2026-10-13T07:44:08.864484545Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

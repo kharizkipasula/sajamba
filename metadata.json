@@ -1,0 +1,8 @@
+{
+  "name": "Bajamba Event Manager",
+  "description": "Modern, all-in-one web dashboard for managing guest lists, RSVP tracking, seating arrangements, and catering reports for Makan Bajamba.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
