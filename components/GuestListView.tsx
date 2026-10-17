@@ -14,6 +14,8 @@ import {
   XCircle,
   Users,
   RotateCcw,
+  MessageCircle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import {
   Guest,
@@ -23,7 +25,10 @@ import {
   AVATAR_STYLES,
   exportToCsv,
 } from '@/lib/bajamba-data';
+import { exportGuestsToSpreadsheet } from '@/lib/firestore-service';
+import { openWhatsAppTicket } from '@/lib/whatsapp-helper';
 import DigitalTicketCard from './DigitalTicketCard';
+import ExportModal from './ExportModal';
 
 interface GuestListViewProps {
   guests: Guest[];
@@ -53,6 +58,7 @@ export default function GuestListView({
   const [tentFilter, setTentFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('name_asc');
   const [selectedTicketGuest, setSelectedTicketGuest] = useState<Guest | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const filteredAndSortedGuests = useMemo(() => {
     const list = guests.filter((g) => {
@@ -106,38 +112,8 @@ export default function GuestListView({
     };
   }, [guests]);
 
-  const handleExportCsv = () => {
-    const headers = [
-      'Kode Tiket',
-      'Nama Tamu',
-      'No. WhatsApp',
-      'Jumlah Jiwa',
-      'Asal Rombongan',
-      'Status RSVP',
-      'Blok Tenda',
-      'Nomor Meja',
-      'Status Check-in',
-      'Waktu Tiba',
-      'Catatan',
-    ];
-    const rows = filteredAndSortedGuests.map((g) => {
-      const tentObj = tents.find((t) => t.id === g.tentId);
-      const tableObj = tables.find((t) => t.id === g.tableId);
-      return [
-        g.ticketCode,
-        g.name,
-        g.phone,
-        String(g.membersCount),
-        g.groupOrigin,
-        g.rsvpStatus,
-        tentObj ? tentObj.name : 'Belum Ditentukan',
-        tableObj ? tableObj.name : 'Belum Ada Meja',
-        g.checkedIn ? 'Tiba di Lokasi' : 'Belum Tiba',
-        g.checkedInAt || '-',
-        g.notes || '-',
-      ];
-    });
-    exportToCsv('daftar-tamu-makan-bajamba.csv', [headers, ...rows]);
+  const handleExportSpreadsheet = () => {
+    setIsExportModalOpen(true);
   };
 
   const resetFilters = () => {
@@ -153,7 +129,7 @@ export default function GuestListView({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1E194D]" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
-            Buku Tamu & Daftar Rombongan
+            Buku Tamu &amp; Daftar Rombongan
           </h1>
           <p className="text-xs sm:text-sm text-slate-500">
             Kelola konfirmasi RSVP, pemetaan tenda jamba, dan e-tiket QR dengan tampilan terstruktur.
@@ -163,11 +139,12 @@ export default function GuestListView({
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={handleExportCsv}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-[#1E194D] hover:bg-slate-50 transition-colors shadow-2xs whitespace-nowrap"
+            onClick={handleExportSpreadsheet}
+            className="inline-flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/70 px-4 py-2.5 text-xs font-bold text-emerald-800 transition-colors shadow-2xs whitespace-nowrap cursor-pointer"
+            title="Ekspor seluruh data tamu ke Excel / Google Sheets"
           >
-            <Download className="h-4 w-4 text-[#6355E5]" />
-            <span>Ekspor CSV</span>
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            <span>Ekspor Excel &amp; Sheets</span>
           </button>
 
           <button
@@ -453,6 +430,16 @@ export default function GuestListView({
                       {/* Aksi Cepat */}
                       <td className="py-3.5 pl-2 pr-6 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* WhatsApp Tiket */}
+                          <button
+                            type="button"
+                            onClick={() => openWhatsAppTicket(guest)}
+                            title={`Kirim Tiket & Barcode via WA ke ${guest.name} (${guest.phone})`}
+                            className="rounded-xl p-2 text-[#1E8E4E] bg-[#E6F6EC] hover:bg-[#d4f3e0] transition-colors shadow-2xs"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+
                           {/* QR Tiket */}
                           <button
                             type="button"
@@ -516,6 +503,15 @@ export default function GuestListView({
           </div>
         </div>
       )}
+
+      {/* Modal Ekspor Data Tamu (Excel / Sheets) */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        guests={filteredAndSortedGuests}
+        tents={tents}
+        tables={tables}
+      />
     </div>
   );
 }

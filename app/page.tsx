@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   LayoutDashboard,
   Users,
@@ -16,6 +17,10 @@ import {
   ChevronRight,
   Ticket,
   Tent,
+  ShieldCheck,
+  LogOut,
+  KeyRound,
+  UserCheck,
 } from 'lucide-react';
 import {
   Guest,
@@ -23,11 +28,14 @@ import {
   TentBlock,
   ActivityItem,
   RsvpStatus,
+  AdminUser,
   INITIAL_GUESTS,
   INITIAL_TABLES,
   INITIAL_TENTS,
   INITIAL_ACTIVITIES,
+  INITIAL_ADMIN_USERS,
   formatIndonesianTime,
+  SAWAHLUNTO_LOGO_URL,
 } from '@/lib/bajamba-data';
 import DashboardView, { NavTab } from '@/components/DashboardView';
 import PublicRegisterView from '@/components/PublicRegisterView';
@@ -35,12 +43,36 @@ import GuestListView from '@/components/GuestListView';
 import TentMappingView from '@/components/TentMappingView';
 import CheckInView from '@/components/CheckInView';
 import GuestModal from '@/components/GuestModal';
+import AdminLoginView from '@/components/AdminLoginView';
+import AdminUsersView from '@/components/AdminUsersView';
+import ExportModal from '@/components/ExportModal';
+import {
+  subscribeGuests,
+  subscribeTents,
+  subscribeTables,
+  subscribeActivities,
+  subscribeAdmins,
+  saveGuestToFirestore,
+  deleteGuestFromFirestore,
+  saveTentToFirestore,
+  deleteTentFromFirestore,
+  saveTableToFirestore,
+  deleteTableFromFirestore,
+  saveActivityToFirestore,
+  saveAdminToFirestore,
+  deleteAdminFromFirestore,
+  seedInitialDataIfEmpty,
+  exportGuestsToSpreadsheet,
+} from '@/lib/firestore-service';
+import { testFirestoreConnection } from '@/lib/firebase';
 
 const STORAGE_KEYS = {
   GUESTS: 'bajamba_sawahlunto_guests_v2',
   TABLES: 'bajamba_sawahlunto_tables_v2',
   TENTS: 'bajamba_sawahlunto_tents_v2',
   ACTIVITIES: 'bajamba_sawahlunto_activities_v2',
+  ADMIN_USERS: 'bajamba_sawahlunto_admin_users_v2',
+  CURRENT_ADMIN: 'bajamba_sawahlunto_current_admin_v2',
 };
 
 const AVATAR_THEME_LIST: Guest['avatarTheme'][] = [
@@ -55,16 +87,20 @@ const AVATAR_THEME_LIST: Guest['avatarTheme'][] = [
 export default function BajambaAppPage() {
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [urlTicketCode, setUrlTicketCode] = useState<string>('');
 
   const [guests, setGuests] = useState<Guest[]>(INITIAL_GUESTS);
   const [tables, setTables] = useState<TableItem[]>(INITIAL_TABLES);
   const [tents, setTents] = useState<TentBlock[]>(INITIAL_TENTS);
   const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Modal State
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [editingGuest, setEditingGuest] = useState<Guest | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Load from localStorage on client mount with requestAnimationFrame
   useEffect(() => {
@@ -74,6 +110,8 @@ export default function BajambaAppPage() {
         const savedTables = localStorage.getItem(STORAGE_KEYS.TABLES);
         const savedTents = localStorage.getItem(STORAGE_KEYS.TENTS);
         const savedActivities = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
+        const savedAdminUsers = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
+        const savedCurrentAdmin = localStorage.getItem(STORAGE_KEYS.CURRENT_ADMIN);
 
         if (savedGuests) {
           const parsed = JSON.parse(savedGuests);
@@ -99,6 +137,31 @@ export default function BajambaAppPage() {
             setActivities(parsed);
           }
         }
+        if (savedAdminUsers) {
+          const parsed = JSON.parse(savedAdminUsers);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAdminUsers(parsed);
+          }
+        }
+        if (savedCurrentAdmin) {
+          const parsed = JSON.parse(savedCurrentAdmin);
+          if (parsed && parsed.id) {
+            setCurrentAdminUser(parsed);
+          }
+        }
+
+        // Check URL parameters (e.g. from WhatsApp ticket link ?tab=register&ticket=BJB-741029)
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const tParam = params.get('ticket');
+          const tabParam = params.get('tab') as NavTab | null;
+          if (tParam) {
+            setUrlTicketCode(tParam);
+            setActiveTab('register');
+          } else if (tabParam && ['dashboard', 'register', 'guests', 'tents', 'checkin', 'admins'].includes(tabParam)) {
+            setActiveTab(tabParam);
+          }
+        }
       } catch {
         // Fallback
       } finally {
@@ -116,10 +179,68 @@ export default function BajambaAppPage() {
       localStorage.setItem(STORAGE_KEYS.TABLES, JSON.stringify(tables));
       localStorage.setItem(STORAGE_KEYS.TENTS, JSON.stringify(tents));
       localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
+      localStorage.setItem(STORAGE_KEYS.ADMIN_USERS, JSON.stringify(adminUsers));
+      if (currentAdminUser) {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_ADMIN, JSON.stringify(currentAdminUser));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.CURRENT_ADMIN);
+      }
     } catch {
       // Ignore quota
     }
-  }, [guests, tables, tents, activities, isHydrated]);
+  }, [guests, tables, tents, activities, adminUsers, currentAdminUser, isHydrated]);
+
+  // Real-time Firestore Synchronizer
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    testFirestoreConnection();
+    seedInitialDataIfEmpty(
+      INITIAL_GUESTS,
+      INITIAL_TENTS,
+      INITIAL_TABLES,
+      INITIAL_ACTIVITIES,
+      INITIAL_ADMIN_USERS
+    );
+
+    const unsubGuests = subscribeGuests((remoteGuests) => {
+      if (remoteGuests && remoteGuests.length > 0) {
+        setGuests(remoteGuests);
+      }
+    });
+
+    const unsubTents = subscribeTents((remoteTents) => {
+      if (remoteTents && remoteTents.length > 0) {
+        setTents(remoteTents);
+      }
+    });
+
+    const unsubTables = subscribeTables((remoteTables) => {
+      if (remoteTables && remoteTables.length > 0) {
+        setTables(remoteTables);
+      }
+    });
+
+    const unsubActivities = subscribeActivities((remoteActs) => {
+      if (remoteActs && remoteActs.length > 0) {
+        setActivities(remoteActs);
+      }
+    });
+
+    const unsubAdmins = subscribeAdmins((remoteAdmins) => {
+      if (remoteAdmins && remoteAdmins.length > 0) {
+        setAdminUsers(remoteAdmins);
+      }
+    });
+
+    return () => {
+      unsubGuests();
+      unsubTents();
+      unsubTables();
+      unsubActivities();
+      unsubAdmins();
+    };
+  }, [isHydrated]);
 
   const recordActivity = (
     guest: Guest,
@@ -139,11 +260,13 @@ export default function BajambaAppPage() {
       timestamp: formatIndonesianTime(new Date()),
     };
     setActivities((prev) => [newAct, ...prev.slice(0, 19)]);
+    saveActivityToFirestore(newAct);
   };
 
   const handleRegisterGuest = (newGuest: Guest) => {
     setGuests((prev) => [newGuest, ...prev]);
     recordActivity(newGuest, 'registered');
+    saveGuestToFirestore(newGuest);
   };
 
   const handleSaveGuest = (
@@ -164,6 +287,7 @@ export default function BajambaAppPage() {
             ...guestData,
             updatedAt: nowLabel,
           };
+          saveGuestToFirestore(updated);
           recordActivity(
             updated,
             updated.rsvpStatus === 'Hadir'
@@ -189,11 +313,13 @@ export default function BajambaAppPage() {
       };
       setGuests((prev) => [newGuest, ...prev]);
       recordActivity(newGuest, 'registered');
+      saveGuestToFirestore(newGuest);
     }
   };
 
   const handleDeleteGuest = (guestId: string) => {
     setGuests((prev) => prev.filter((g) => g.id !== guestId));
+    deleteGuestFromFirestore(guestId);
   };
 
   const handleQuickStatusChange = (guestId: string, status: RsvpStatus) => {
@@ -206,6 +332,7 @@ export default function BajambaAppPage() {
           rsvpStatus: status,
           updatedAt: nowLabel,
         };
+        saveGuestToFirestore(updated);
         recordActivity(
           updated,
           status === 'Hadir' ? 'rsvp_hadir' : status === 'Berhalangan' ? 'rsvp_berhalangan' : 'rsvp_pending'
@@ -228,6 +355,7 @@ export default function BajambaAppPage() {
           tableId,
           updatedAt: nowLabel,
         };
+        saveGuestToFirestore(updated);
         if (tentObj) {
           recordActivity(updated, 'tent_assigned', tentObj.shortCode);
         }
@@ -254,6 +382,7 @@ export default function BajambaAppPage() {
           tentId: tblObj ? tblObj.tentId : g.tentId,
           updatedAt: nowLabel,
         };
+        saveGuestToFirestore(updated);
         return updated;
       })
     );
@@ -265,7 +394,14 @@ export default function BajambaAppPage() {
   ) => {
     if (existingId) {
       setTents((prev) =>
-        prev.map((t) => (t.id === existingId ? { ...t, ...tentData } : t))
+        prev.map((t) => {
+          if (t.id === existingId) {
+            const updated = { ...t, ...tentData };
+            saveTentToFirestore(updated);
+            return updated;
+          }
+          return t;
+        })
       );
     } else {
       const newTentId = `tenda-${Date.now()}`;
@@ -275,6 +411,7 @@ export default function BajambaAppPage() {
         tableIds: [],
       };
       setTents((prev) => [...prev, newTent]);
+      saveTentToFirestore(newTent);
     }
   };
 
@@ -284,22 +421,27 @@ export default function BajambaAppPage() {
     setGuests((prev) =>
       prev.map((g) => {
         if (g.tentId === tentId) {
-          return {
+          const updated = {
             ...g,
             tentId: null,
             tableId: null,
             updatedAt: nowLabel,
           };
+          saveGuestToFirestore(updated);
+          return updated;
         }
         return g;
       })
     );
 
     // Hapus meja yang berada di dalam tenda ini
-    setTables((prev) => prev.filter((t) => t.tentId !== tentId));
+    tables
+      .filter((t) => t.tentId === tentId)
+      .forEach((tbl) => deleteTableFromFirestore(tbl.id));
 
-    // Hapus tenda dari daftar
+    setTables((prev) => prev.filter((t) => t.tentId !== tentId));
     setTents((prev) => prev.filter((t) => t.id !== tentId));
+    deleteTentFromFirestore(tentId);
   };
 
   const handleSaveTable = (
@@ -308,7 +450,14 @@ export default function BajambaAppPage() {
   ) => {
     if (existingId !== undefined) {
       setTables((prev) =>
-        prev.map((t) => (t.id === existingId ? { ...t, ...tableData } : t))
+        prev.map((t) => {
+          if (t.id === existingId) {
+            const updated = { ...t, ...tableData };
+            saveTableToFirestore(updated);
+            return updated;
+          }
+          return t;
+        })
       );
     } else {
       const nextId =
@@ -318,14 +467,18 @@ export default function BajambaAppPage() {
         ...tableData,
       };
       setTables((prev) => [...prev, newTable]);
+      saveTableToFirestore(newTable);
 
       // Hubungkan ke tableIds pada tenda terkait
       setTents((prev) =>
-        prev.map((t) =>
-          t.id === tableData.tentId
-            ? { ...t, tableIds: [...t.tableIds, nextId] }
-            : t
-        )
+        prev.map((t) => {
+          if (t.id === tableData.tentId) {
+            const updatedTent = { ...t, tableIds: [...t.tableIds, nextId] };
+            saveTentToFirestore(updatedTent);
+            return updatedTent;
+          }
+          return t;
+        })
       );
     }
   };
@@ -336,11 +489,13 @@ export default function BajambaAppPage() {
     setGuests((prev) =>
       prev.map((g) => {
         if (g.tableId === tableId) {
-          return {
+          const updated = {
             ...g,
             tableId: null,
             updatedAt: nowLabel,
           };
+          saveGuestToFirestore(updated);
+          return updated;
         }
         return g;
       })
@@ -348,13 +503,18 @@ export default function BajambaAppPage() {
 
     // Hapus meja
     setTables((prev) => prev.filter((t) => t.id !== tableId));
+    deleteTableFromFirestore(tableId);
 
     // Update tableIds di tenda
     setTents((prev) =>
-      prev.map((t) => ({
-        ...t,
-        tableIds: t.tableIds.filter((id) => id !== tableId),
-      }))
+      prev.map((t) => {
+        const updated = {
+          ...t,
+          tableIds: t.tableIds.filter((id) => id !== tableId),
+        };
+        saveTentToFirestore(updated);
+        return updated;
+      })
     );
   };
 
@@ -371,6 +531,7 @@ export default function BajambaAppPage() {
           rsvpStatus: nextCheckedIn ? 'Hadir' : g.rsvpStatus,
           updatedAt: nowTime,
         };
+        saveGuestToFirestore(updated);
         if (nextCheckedIn) {
           recordActivity(updated, 'checkin');
         }
@@ -379,16 +540,77 @@ export default function BajambaAppPage() {
     );
   };
 
+  const handleAdminLogin = (user: AdminUser) => {
+    const nowTime = formatIndonesianTime(new Date());
+    const updatedUser: AdminUser = { ...user, lastLoginAt: nowTime };
+    setCurrentAdminUser(updatedUser);
+    setAdminUsers((prev) =>
+      prev.map((u) => (u.id === user.id ? updatedUser : u))
+    );
+    saveAdminToFirestore(updatedUser);
+    setActiveTab('dashboard');
+  };
+
+  const handleAdminLogout = () => {
+    setCurrentAdminUser(null);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_ADMIN);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSaveAdmin = (
+    adminData: Omit<AdminUser, 'id' | 'createdAt'>,
+    existingId?: string
+  ) => {
+    const nowTime = formatIndonesianTime(new Date());
+    if (existingId) {
+      setAdminUsers((prev) =>
+        prev.map((u) => {
+          if (u.id === existingId) {
+            const updated: AdminUser = {
+              ...u,
+              ...adminData,
+            };
+            if (currentAdminUser?.id === existingId) {
+              setCurrentAdminUser(updated);
+            }
+            saveAdminToFirestore(updated);
+            return updated;
+          }
+          return u;
+        })
+      );
+    } else {
+      const newAdmin: AdminUser = {
+        id: `admin-${Date.now()}`,
+        ...adminData,
+        createdAt: nowTime,
+        lastLoginAt: null,
+      };
+      setAdminUsers((prev) => [...prev, newAdmin]);
+      saveAdminToFirestore(newAdmin);
+    }
+  };
+
+  const handleDeleteAdmin = (adminId: string) => {
+    setAdminUsers((prev) => prev.filter((u) => u.id !== adminId));
+    deleteAdminFromFirestore(adminId);
+  };
+
   const handleResetDemoData = () => {
     setGuests(INITIAL_GUESTS);
     setTables(INITIAL_TABLES);
     setTents(INITIAL_TENTS);
     setActivities(INITIAL_ACTIVITIES);
+    setAdminUsers(INITIAL_ADMIN_USERS);
     try {
       localStorage.removeItem(STORAGE_KEYS.GUESTS);
       localStorage.removeItem(STORAGE_KEYS.TABLES);
       localStorage.removeItem(STORAGE_KEYS.TENTS);
       localStorage.removeItem(STORAGE_KEYS.ACTIVITIES);
+      localStorage.removeItem(STORAGE_KEYS.ADMIN_USERS);
     } catch {
       // ignore
     }
@@ -401,7 +623,6 @@ export default function BajambaAppPage() {
     badge?: string;
   }> = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'register', label: 'Pendaftaran & E-Tiket', icon: Ticket },
     { id: 'guests', label: 'Daftar Tamu', icon: Users, badge: String(guests.length) },
     { id: 'tents', label: 'Pemetaan Tenda', icon: Tent, badge: `${tents.length} Tenda` },
     {
@@ -410,6 +631,13 @@ export default function BajambaAppPage() {
       icon: QrCode,
       badge: `${guests.filter((g) => g.checkedIn).length}`,
     },
+    {
+      id: 'admins',
+      label: 'Kelola Petugas Admin',
+      icon: ShieldCheck,
+      badge: `${adminUsers.length} User`,
+    },
+    { id: 'register', label: 'Pendaftaran & E-Tiket', icon: Ticket },
   ];
 
   const activeNavLabel = navItems.find((n) => n.id === activeTab)?.label || 'Dashboard';
@@ -436,20 +664,27 @@ export default function BajambaAppPage() {
             <button
               type="button"
               onClick={() => {
-                setActiveTab('dashboard');
+                setActiveTab(currentAdminUser ? 'dashboard' : 'register');
                 setMobileSidebarOpen(false);
               }}
               className="flex items-center gap-3 text-left group"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#6355E5] text-white shadow-md group-hover:bg-[#7265F0] transition-colors">
-                <Check className="h-5 w-5 stroke-[3]" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white p-1 shadow-md group-hover:scale-105 transition-transform overflow-hidden">
+                <Image
+                  src={SAWAHLUNTO_LOGO_URL}
+                  alt="Lambang Kota Sawahlunto"
+                  width={36}
+                  height={36}
+                  className="w-full h-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <div className="min-w-0">
-                <span className="block text-base font-extrabold tracking-tight text-white leading-tight truncate" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
-                  Bajamba Event
+                <span className="block text-sm font-extrabold tracking-tight text-white leading-tight truncate" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
+                  Kota Sawahlunto
                 </span>
                 <span className="block text-[11px] font-medium text-slate-400 truncate">
-                  Sawahlunto · RSVP & Tenda
+                  Makan Bajamba &bull; Disbud
                 </span>
               </div>
             </button>
@@ -507,22 +742,62 @@ export default function BajambaAppPage() {
           </div>
         </div>
 
-        {/* Bottom Info & Reset */}
+        {/* Bottom Profile & Reset */}
         <div className="p-4 border-t border-white/10 space-y-3">
-          <div className="rounded-2xl bg-[#221D42] px-3.5 py-3 text-xs">
-            <div className="font-bold text-white truncate">Makan Bajamba Sawahlunto</div>
-            <div className="text-[11px] text-slate-400 mt-0.5 font-mono tabular-nums">
-              {guests.reduce((a, b) => a + b.membersCount, 0)} Jiwa · {guests.length} Rombongan
+          {currentAdminUser ? (
+            <div className="rounded-2xl bg-[#221D42] p-3 text-xs border border-white/5">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#6355E5] to-[#EAB308] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                    {currentAdminUser.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-white truncate text-[11px]">
+                      {currentAdminUser.displayName}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">
+                      @{currentAdminUser.username}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 shrink-0">
+                  {currentAdminUser.role}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAdminLogout}
+                className="w-full mt-1 rounded-xl bg-white/5 hover:bg-rose-500/20 hover:text-rose-300 py-1.5 px-2.5 text-[11px] font-semibold text-slate-300 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Keluar Sesi (Logout)</span>
+              </button>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl bg-[#221D42] p-3 text-xs border border-white/5 text-center">
+              <p className="text-[11px] text-slate-300 font-medium">Mode Publik</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('dashboard');
+                  setMobileSidebarOpen(false);
+                }}
+                className="w-full mt-2 rounded-xl bg-[#6355E5] hover:bg-[#7265F0] py-2 px-3 text-[11px] font-bold text-white transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Login Petugas Admin</span>
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
             onClick={handleResetDemoData}
-            className="w-full rounded-xl bg-[#2B244D] hover:bg-[#372E61] py-2.5 px-3 text-xs font-semibold text-slate-200 transition-colors flex items-center justify-center gap-2"
+            className="w-full rounded-xl bg-[#2B244D] hover:bg-[#372E61] py-2 px-3 text-[11px] font-semibold text-slate-300 transition-colors flex items-center justify-center gap-1.5"
           >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset Data Awal (12 Tamu)</span>
+            <RotateCcw className="h-3 w-3" />
+            <span>Reset Data Awal</span>
           </button>
         </div>
       </aside>
@@ -543,107 +818,184 @@ export default function BajambaAppPage() {
             <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 truncate">
               <button
                 type="button"
-                onClick={() => setActiveTab('dashboard')}
+                onClick={() => setActiveTab(currentAdminUser ? 'dashboard' : 'register')}
                 className="hover:text-[#1E194D] transition-colors inline-flex items-center gap-1.5 shrink-0"
               >
-                <Home className="h-4 w-4 text-slate-400" />
-                <span className="hidden sm:inline">Makan Bajamba</span>
+                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-slate-200/80 bg-white p-0.5">
+                  <Image
+                    src={SAWAHLUNTO_LOGO_URL}
+                    alt="Logo Sawahlunto"
+                    width={20}
+                    height={20}
+                    className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+                <span className="hidden sm:inline font-semibold">Kota Sawahlunto</span>
               </button>
               <span className="text-slate-300" aria-hidden="true">/</span>
               <span className="font-bold text-[#1E194D] truncate">{activeNavLabel}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveTab('register')}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#6355E5] bg-white px-3.5 py-2 text-xs font-bold text-[#6355E5] hover:bg-[#EDE9FE]/40 transition-colors whitespace-nowrap"
-            >
-              <Ticket className="h-3.5 w-3.5" />
-              <span>Link E-Tiket Tamu</span>
-            </button>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {currentAdminUser ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('register')}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#6355E5] bg-white px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-bold text-[#6355E5] hover:bg-[#EDE9FE]/40 transition-colors whitespace-nowrap"
+                >
+                  <Ticket className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Link E-Tiket Tamu</span>
+                  <span className="sm:hidden">Tiket</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditingGuest(null);
-                setIsGuestModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-[#6355E5] px-3.5 py-2 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-2xs whitespace-nowrap"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              <span>+ Tambah Tamu</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingGuest(null);
+                    setIsGuestModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#6355E5] px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-2xs whitespace-nowrap"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">+ Tambah Tamu</span>
+                  <span className="sm:hidden">+ Tamu</span>
+                </button>
+
+                {/* Admin Pill with Quick Logout */}
+                <div className="hidden md:flex items-center gap-2 pl-2 border-l border-slate-200">
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-[#1E194D] leading-tight truncate max-w-[120px]">
+                      {currentAdminUser.displayName}
+                    </p>
+                    <span className="text-[10px] font-extrabold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                      {currentAdminUser.role}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAdminLogout}
+                    className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Keluar Sesi (Logout)"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {activeTab === 'register' ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('dashboard')}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#1E194D] hover:bg-[#2B244D] px-3.5 py-2 text-xs font-bold text-white transition-colors shadow-2xs whitespace-nowrap"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5 text-[#EAB308]" />
+                    <span>Login Petugas Admin</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('register')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#6355E5] bg-white px-3.5 py-2 text-xs font-bold text-[#6355E5] hover:bg-[#EDE9FE]/40 transition-colors whitespace-nowrap"
+                  >
+                    <Ticket className="h-3.5 w-3.5" />
+                    <span>Buka Portal E-Tiket Tamu</span>
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </header>
 
         {/* Viewport Body */}
         <main className="flex-1 p-4 sm:p-8 max-w-[1360px] w-full mx-auto">
-          {activeTab === 'dashboard' && (
-            <DashboardView
-              guests={guests}
-              activities={activities}
-              tables={tables}
-              tents={tents}
-              onNavigate={(tab) => setActiveTab(tab)}
-              onOpenAddModal={() => {
-                setEditingGuest(null);
-                setIsGuestModalOpen(true);
-              }}
+          {/* Protected Area: If not logged in and not on register tab, show AdminLoginView */}
+          {!currentAdminUser && activeTab !== 'register' ? (
+            <AdminLoginView
+              adminUsers={adminUsers}
+              onLogin={handleAdminLogin}
+              onSwitchToPublic={() => setActiveTab('register')}
             />
-          )}
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardView
+                  guests={guests}
+                  activities={activities}
+                  tables={tables}
+                  tents={tents}
+                  onNavigate={(tab) => setActiveTab(tab)}
+                  onOpenAddModal={() => {
+                    setEditingGuest(null);
+                    setIsGuestModalOpen(true);
+                  }}
+                  onExportSpreadsheet={() => setIsExportModalOpen(true)}
+                />
+              )}
 
-          {activeTab === 'register' && (
-            <PublicRegisterView
-              guests={guests}
-              tents={tents}
-              tables={tables}
-              onRegisterGuest={handleRegisterGuest}
-            />
-          )}
+              {activeTab === 'register' && (
+                <PublicRegisterView
+                  guests={guests}
+                  tents={tents}
+                  tables={tables}
+                  onRegisterGuest={handleRegisterGuest}
+                  initialTicketCode={urlTicketCode}
+                />
+              )}
 
-          {activeTab === 'guests' && (
-            <GuestListView
-              guests={guests}
-              tents={tents}
-              tables={tables}
-              onOpenAddModal={() => {
-                setEditingGuest(null);
-                setIsGuestModalOpen(true);
-              }}
-              onEditGuest={(guest) => {
-                setEditingGuest(guest);
-                setIsGuestModalOpen(true);
-              }}
-              onDeleteGuest={handleDeleteGuest}
-              onQuickStatusChange={handleQuickStatusChange}
-              onQuickTentChange={handleQuickTentChange}
-            />
-          )}
+              {activeTab === 'guests' && (
+                <GuestListView
+                  guests={guests}
+                  tents={tents}
+                  tables={tables}
+                  onOpenAddModal={() => {
+                    setEditingGuest(null);
+                    setIsGuestModalOpen(true);
+                  }}
+                  onEditGuest={(guest) => {
+                    setEditingGuest(guest);
+                    setIsGuestModalOpen(true);
+                  }}
+                  onDeleteGuest={handleDeleteGuest}
+                  onQuickStatusChange={handleQuickStatusChange}
+                  onQuickTentChange={handleQuickTentChange}
+                />
+              )}
 
-          {activeTab === 'tents' && (
-            <TentMappingView
-              guests={guests}
-              tents={tents}
-              tables={tables}
-              onAssignTent={handleAssignTent}
-              onSaveTent={handleSaveTent}
-              onDeleteTent={handleDeleteTent}
-              onSaveTable={handleSaveTable}
-              onDeleteTable={handleDeleteTable}
-            />
-          )}
+              {activeTab === 'tents' && (
+                <TentMappingView
+                  guests={guests}
+                  tents={tents}
+                  tables={tables}
+                  onAssignTent={handleAssignTent}
+                  onSaveTent={handleSaveTent}
+                  onDeleteTent={handleDeleteTent}
+                  onSaveTable={handleSaveTable}
+                  onDeleteTable={handleDeleteTable}
+                />
+              )}
 
+              {activeTab === 'checkin' && (
+                <CheckInView
+                  guests={guests}
+                  tents={tents}
+                  tables={tables}
+                  onToggleCheckIn={handleToggleCheckIn}
+                />
+              )}
 
-
-          {activeTab === 'checkin' && (
-            <CheckInView
-              guests={guests}
-              tents={tents}
-              tables={tables}
-              onToggleCheckIn={handleToggleCheckIn}
-            />
+              {activeTab === 'admins' && (
+                <AdminUsersView
+                  adminUsers={adminUsers}
+                  currentAdmin={currentAdminUser}
+                  onSaveAdmin={handleSaveAdmin}
+                  onDeleteAdmin={handleDeleteAdmin}
+                />
+              )}
+            </>
           )}
 
 
@@ -661,6 +1013,15 @@ export default function BajambaAppPage() {
         onSave={handleSaveGuest}
         editingGuest={editingGuest}
         existingGroups={Array.from(new Set(guests.map((g) => g.groupOrigin)))}
+        tents={tents}
+        tables={tables}
+      />
+
+      {/* Modal Ekspor Data Tamu (Excel & Sheets) */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        guests={guests}
         tents={tents}
         tables={tables}
       />

@@ -13,6 +13,7 @@ import {
   Ticket,
   ArrowRight,
   RotateCcw,
+  MessageCircle,
 } from 'lucide-react';
 import {
   Guest,
@@ -21,6 +22,7 @@ import {
   DEFAULT_GROUP_ORIGINS,
   generateTicketCode,
 } from '@/lib/bajamba-data';
+import { openWhatsAppTicket } from '@/lib/whatsapp-helper';
 import DigitalTicketCard from './DigitalTicketCard';
 
 interface PublicRegisterViewProps {
@@ -28,6 +30,7 @@ interface PublicRegisterViewProps {
   tents: TentBlock[];
   tables: TableItem[];
   onRegisterGuest: (newGuest: Guest) => void;
+  initialTicketCode?: string;
 }
 
 export default function PublicRegisterView({
@@ -35,6 +38,7 @@ export default function PublicRegisterView({
   tents,
   tables,
   onRegisterGuest,
+  initialTicketCode,
 }: PublicRegisterViewProps) {
   const [activeTab, setActiveTab] = useState<'register' | 'lookup'>('register');
 
@@ -54,6 +58,20 @@ export default function PublicRegisterView({
   const [lookupQuery, setLookupQuery] = useState('');
   const [foundGuest, setFoundGuest] = useState<Guest | null>(null);
   const [lookupError, setLookupError] = useState('');
+
+  // Auto lookup if ticket query provided via WhatsApp link
+  React.useEffect(() => {
+    if (initialTicketCode) {
+      setActiveTab('lookup');
+      setLookupQuery(initialTicketCode);
+      const match = guests.find(
+        (g) => g.ticketCode.toLowerCase() === initialTicketCode.toLowerCase()
+      );
+      if (match) {
+        setFoundGuest(match);
+      }
+    }
+  }, [initialTicketCode, guests]);
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,14 +212,24 @@ export default function PublicRegisterView({
                 <p className="text-xs text-emerald-800">
                   Berikut adalah E-Tiket resmi Anda. Simpan atau unduh gambar tiket di bawah ini untuk ditunjukkan saat tiba di Balai Adat Sawahlunto.
                 </p>
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-[#6355E5] hover:underline"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Daftarkan rombongan lain
-                </button>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openWhatsAppTicket(registeredGuest)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#25D366] px-4 py-2 text-xs font-bold text-white hover:bg-[#20ba59] transition-colors shadow-2xs"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>Kirim Tiket ke WhatsApp Saya</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#6355E5] hover:underline px-2.5 py-1.5"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Daftarkan rombongan lain
+                  </button>
+                </div>
               </div>
 
               <DigitalTicketCard
@@ -258,7 +286,6 @@ export default function PublicRegisterView({
                     <input
                       type="number"
                       min={1}
-                      max={25}
                       value={membersCount}
                       onChange={(e) => setMembersCount(Number(e.target.value))}
                       className="w-full rounded-xl border border-slate-200 bg-[#F8F9FC] px-4 py-2.5 text-sm font-bold text-[#1E194D] font-mono tabular-nums focus:border-[#6355E5] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#6355E5]/20"

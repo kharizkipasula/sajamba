@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "Guest": {
+      "title": "Guest",
+      "description": "Data tamu undangan perhelatan makan bajamba",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ticketCode": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "kategoriInstansi": { "type": "string" },
+        "kelompokKelas": { "type": "string" },
+        "instansiAlamat": { "type": "string" },
+        "membersCount": { "type": "number" },
+        "groupOrigin": { "type": "string" },
+        "rsvpStatus": { "type": "string", "enum": ["Hadir", "Belum Konfirmasi", "Berhalangan"] },
+        "notes": { "type": "string" },
+        "tentId": { "type": "string" },
+        "tableId": { "type": "number" },
+        "checkedIn": { "type": "boolean" },
+        "checkedInAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "registeredAt": { "type": "string" },
+        "avatarTheme": { "type": "string" }
+      },
+      "required": ["id", "ticketCode", "name", "phone", "membersCount", "groupOrigin", "rsvpStatus"]
+    },
+    "Tent": {
+      "title": "Tent",
+      "description": "Blok tenda adat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "shortCode": { "type": "string" },
+        "zoneDesc": { "type": "string" },
+        "capacity": { "type": "number" },
+        "colorTheme": { "type": "string" },
+        "badgeBg": { "type": "string" },
+        "badgeText": { "type": "string" }
+      },
+      "required": ["id", "name", "shortCode", "capacity"]
+    },
+    "Table": {
+      "title": "Table",
+      "description": "Meja bajamba",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "tentId": { "type": "string" },
+        "capacity": { "type": "number" }
+      },
+      "required": ["id", "name", "tentId", "capacity"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Log aktivitas acara",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "guestId": { "type": "string" },
+        "guestName": { "type": "string" },
+        "groupOrigin": { "type": "string" },
+        "ticketCode": { "type": "string" },
+        "actionType": { "type": "string" },
+        "rsvpStatus": { "type": "string" },
+        "membersCount": { "type": "number" },
+        "tentName": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "guestName", "actionType", "timestamp"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Akun petugas admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["SUPERADMIN", "ADMIN", "OPERATOR"] },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["id", "username", "password", "displayName", "role"]
+    }
+  },
+  "firestore": {
+    "/guests/{guestId}": {
+      "schema": "Guest",
+      "description": "Koleksi tamu undangan makan bajamba"
+    },
+    "/tents/{tentId}": {
+      "schema": "Tent",
+      "description": "Koleksi blok tenda"
+    },
+    "/tables/{tableId}": {
+      "schema": "Table",
+      "description": "Koleksi meja bajamba"
+    },
+    "/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "Log aktivitas registrasi dan checkin"
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminUser",
+      "description": "Daftar kredensial petugas admin"
+    }
+  }
+}

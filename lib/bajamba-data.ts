@@ -1,3 +1,6 @@
+export const SAWAHLUNTO_LOGO_URL =
+  'https://upload.wikimedia.org/wikipedia/commons/a/ae/Lambang_Kota_Sawahlunto.jpg';
+
 export type RsvpStatus = 'Hadir' | 'Belum Konfirmasi' | 'Berhalangan';
 
 export interface TentBlock {
@@ -60,6 +63,28 @@ export interface ActivityItem {
   tentName?: string;
   timestamp: string;
 }
+
+export interface AdminUser {
+  id: string;
+  username: string;
+  password: string;
+  displayName: string;
+  role: 'SUPERADMIN' | 'ADMIN' | 'OPERATOR';
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
+export const INITIAL_ADMIN_USERS: AdminUser[] = [
+  {
+    id: 'admin-1',
+    username: 'admindisbud',
+    password: 'admin',
+    displayName: 'Admin Dinas Kebudayaan',
+    role: 'SUPERADMIN',
+    createdAt: '2026-10-14 08:00',
+    lastLoginAt: null,
+  },
+];
 
 export const DEFAULT_GROUP_ORIGINS: string[] = [
   'Keluarga dari Koto Gadang',

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import {
   Users,
   CheckCircle2,
@@ -24,6 +25,7 @@ import {
   TableItem,
   TentBlock,
   AVATAR_STYLES,
+  SAWAHLUNTO_LOGO_URL,
 } from '@/lib/bajamba-data';
 
 export type NavTab =
@@ -31,7 +33,8 @@ export type NavTab =
   | 'register'
   | 'guests'
   | 'tents'
-  | 'checkin';
+  | 'checkin'
+  | 'admins';
 
 interface DashboardViewProps {
   guests: Guest[];
@@ -40,6 +43,7 @@ interface DashboardViewProps {
   tents: TentBlock[];
   onNavigate: (tab: NavTab) => void;
   onOpenAddModal: () => void;
+  onExportSpreadsheet?: () => void;
 }
 
 export default function DashboardView({
@@ -49,6 +53,7 @@ export default function DashboardView({
   tents,
   onNavigate,
   onOpenAddModal,
+  onExportSpreadsheet,
 }: DashboardViewProps) {
   const totalInvitations = guests.length;
   const totalInvitedSouls = guests.reduce((acc, g) => acc + g.membersCount, 0);
@@ -82,26 +87,50 @@ export default function DashboardView({
       {/* Top Banner */}
       <div className="rounded-3xl bg-white border border-slate-200/90 p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#6355E5]">
-              <span>Perhelatan Adat Kota Sawahlunto</span>
-              <span aria-hidden="true">·</span>
-              <span>Balai Adat Nagari & Balai Ransum</span>
+          <div className="flex items-start sm:items-center gap-4 max-w-2xl">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-50 border border-slate-200/80 p-2 shrink-0 shadow-xs flex items-center justify-center">
+              <Image
+                src={SAWAHLUNTO_LOGO_URL}
+                alt="Lambang Kota Sawahlunto"
+                width={72}
+                height={72}
+                className="w-full h-full object-contain"
+                referrerPolicy="no-referrer"
+              />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#1E194D]" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
-              Makan Bajamba Sawahlunto
-            </h1>
-            <p className="text-sm text-slate-600 leading-relaxed">
-              Platform terpadu registrasi tamu mandiri, penerbitan e-tiket QR Code, pemetaan tenda adat,
-              penataan meja jamba, dan check-in gerbang secara real-time.
-            </p>
+            <div className="space-y-1 sm:space-y-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#6355E5]">
+                <span>Pemerintah Kota Sawahlunto</span>
+                <span aria-hidden="true">&bull;</span>
+                <span>Dinas Kebudayaan</span>
+              </div>
+              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight text-[#1E194D]" style={{ fontFamily: 'var(--font-poppins), sans-serif' }}>
+                Makan Bajamba Sawahlunto
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Platform terpadu registrasi tamu mandiri, penerbitan e-tiket QR Code, pemetaan tenda adat,
+                penataan meja jamba, dan check-in gerbang secara real-time.
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {onExportSpreadsheet && (
+              <button
+                type="button"
+                onClick={onExportSpreadsheet}
+                className="rounded-full border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/70 px-4 py-2.5 text-xs font-bold text-emerald-800 transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Unduh seluruh data tamu dalam format Excel / Google Sheets"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                <span>Ekspor Excel / Sheets</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => onNavigate('register')}
-              className="rounded-full border border-[#6355E5] bg-white px-5 py-2.5 text-xs font-bold text-[#6355E5] hover:bg-[#EDE9FE]/50 transition-colors flex items-center gap-1.5"
+              className="rounded-full border border-[#6355E5] bg-white px-4 py-2.5 text-xs font-bold text-[#6355E5] hover:bg-[#EDE9FE]/50 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <Ticket className="h-4 w-4" />
               <span>Link Pendaftaran Tamu</span>
@@ -109,7 +138,7 @@ export default function DashboardView({
             <button
               type="button"
               onClick={onOpenAddModal}
-              className="flex items-center gap-2 rounded-full bg-[#6355E5] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-xs"
+              className="flex items-center gap-2 rounded-full bg-[#6355E5] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-xs cursor-pointer"
             >
               <UserPlus className="h-4 w-4" />
               <span>+ Tambah Tamu</span>

@@ -11,8 +11,10 @@ import {
   Phone,
   CheckCircle2,
   Share2,
+  MessageCircle,
 } from 'lucide-react';
 import { Guest, TentBlock, TableItem } from '@/lib/bajamba-data';
+import { openWhatsAppTicket } from '@/lib/whatsapp-helper';
 
 interface DigitalTicketCardProps {
   guest: Guest;
@@ -262,34 +264,45 @@ export default function DigitalTicketCard({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 print:hidden">
+        <div className="space-y-2.5 print:hidden">
           <button
             type="button"
-            onClick={handleDownloadImage}
-            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#6355E5] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-xs"
+            onClick={() => openWhatsAppTicket(guest)}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3 text-xs font-bold text-white hover:bg-[#20ba59] transition-colors shadow-xs"
           >
-            <Download className="h-4 w-4" />
-            <span>Unduh Tiket (PNG)</span>
+            <MessageCircle className="h-4 w-4" />
+            <span>Kirim Notifikasi Tiket via WhatsApp</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            <Printer className="h-4 w-4" />
-            <span>Cetak</span>
-          </button>
-
-          {onClose && (
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={onClose}
-              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              onClick={handleDownloadImage}
+              className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#6355E5] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#5243D4] transition-colors shadow-xs"
             >
-              Tutup
+              <Download className="h-4 w-4" />
+              <span>Unduh Tiket (PNG)</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Cetak</span>
+            </button>
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Tutup
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

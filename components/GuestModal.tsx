@@ -176,7 +176,6 @@ export default function GuestModal({
               <input
                 type="number"
                 min={1}
-                max={25}
                 value={membersCount}
                 onChange={(e) => setMembersCount(Number(e.target.value))}
                 className="w-full rounded-xl border border-slate-200 bg-[#F8F9FC] px-3.5 py-2.5 text-sm font-bold text-[#1E194D] font-mono tabular-nums focus:border-[#6355E5] focus:bg-white focus:outline-none"

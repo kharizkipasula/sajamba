@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Koleksi tamu undangan makan bajamba
+    match /guests/{guestId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Koleksi blok tenda adat
+    match /tents/{tentId} {
+      allow read, write: if true;
+    }
+
+    // Koleksi meja jamba
+    match /tables/{tableId} {
+      allow read, write: if true;
+    }
+
+    // Koleksi log aktivitas
+    match /activities/{activityId} {
+      allow read, write: if true;
+    }
+
+    // Koleksi akun admin & petugas
+    match /admins/{adminId} {
+      allow read, write: if true;
+    }
+  }
+}
