@@ -13,7 +13,29 @@ export interface TentBlock {
   colorTheme: string;
   badgeBg: string;
   badgeText: string;
+  coords?: { x: number; y: number };
 }
+
+export interface VenueMapConfig {
+  imageUrl: string;
+  venueName: string;
+  gridColumns?: number;
+  gridRows?: number;
+  notes?: string;
+  tentCoordinates?: Record<string, { x: number; y: number }>;
+}
+
+export const DEFAULT_VENUE_MAP: VenueMapConfig = {
+  imageUrl: '',
+  venueName: 'Kawasan Wisata Adat Silungkang & Lapangan Segitiga Sawahlunto',
+  notes: 'Denah Tata Ruang Makan Bajamba Terbuka',
+  tentCoordinates: {
+    'tenda-a': { x: 50, y: 22 },
+    'tenda-b': { x: 25, y: 56 },
+    'tenda-c': { x: 75, y: 56 },
+    'tenda-d': { x: 50, y: 82 },
+  },
+};
 
 export interface TableItem {
   id: number;

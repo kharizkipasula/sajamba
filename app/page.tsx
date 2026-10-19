@@ -36,6 +36,8 @@ import {
   INITIAL_ADMIN_USERS,
   formatIndonesianTime,
   SAWAHLUNTO_LOGO_URL,
+  DEFAULT_VENUE_MAP,
+  VenueMapConfig,
 } from '@/lib/bajamba-data';
 import DashboardView, { NavTab } from '@/components/DashboardView';
 import PublicRegisterView from '@/components/PublicRegisterView';
@@ -73,6 +75,7 @@ const STORAGE_KEYS = {
   ACTIVITIES: 'bajamba_sawahlunto_activities_v2',
   ADMIN_USERS: 'bajamba_sawahlunto_admin_users_v2',
   CURRENT_ADMIN: 'bajamba_sawahlunto_current_admin_v2',
+  VENUE_MAP: 'bajamba_sawahlunto_venue_map_v2',
 };
 
 const AVATAR_THEME_LIST: Guest['avatarTheme'][] = [
@@ -95,6 +98,7 @@ export default function BajambaAppPage() {
   const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser | null>(null);
+  const [venueMap, setVenueMap] = useState<VenueMapConfig>(DEFAULT_VENUE_MAP);
   const [isHydrated, setIsHydrated] = useState(false);
 
   // Modal State
@@ -112,6 +116,18 @@ export default function BajambaAppPage() {
         const savedActivities = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
         const savedAdminUsers = localStorage.getItem(STORAGE_KEYS.ADMIN_USERS);
         const savedCurrentAdmin = localStorage.getItem(STORAGE_KEYS.CURRENT_ADMIN);
+        const savedVenueMap = localStorage.getItem(STORAGE_KEYS.VENUE_MAP);
+
+        if (savedVenueMap) {
+          try {
+            const parsed = JSON.parse(savedVenueMap);
+            if (parsed && typeof parsed === 'object') {
+              setVenueMap(parsed);
+            }
+          } catch {
+            // ignore
+          }
+        }
 
         if (savedGuests) {
           const parsed = JSON.parse(savedGuests);
@@ -599,18 +615,59 @@ export default function BajambaAppPage() {
     deleteAdminFromFirestore(adminId);
   };
 
+  const handleUpdateTentCoordinates = (
+    tentId: string,
+    coords: { x: number; y: number }
+  ) => {
+    setVenueMap((prev) => {
+      const updated: VenueMapConfig = {
+        ...prev,
+        tentCoordinates: {
+          ...(prev.tentCoordinates || {}),
+          [tentId]: coords,
+        },
+      };
+      try {
+        localStorage.setItem(STORAGE_KEYS.VENUE_MAP, JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveVenueMap = (mapConfig: VenueMapConfig) => {
+    setVenueMap(mapConfig);
+    try {
+      localStorage.setItem(STORAGE_KEYS.VENUE_MAP, JSON.stringify(mapConfig));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleResetVenueMapToDefault = () => {
+    setVenueMap(DEFAULT_VENUE_MAP);
+    try {
+      localStorage.setItem(STORAGE_KEYS.VENUE_MAP, JSON.stringify(DEFAULT_VENUE_MAP));
+    } catch {
+      // ignore
+    }
+  };
+
   const handleResetDemoData = () => {
     setGuests(INITIAL_GUESTS);
     setTables(INITIAL_TABLES);
     setTents(INITIAL_TENTS);
     setActivities(INITIAL_ACTIVITIES);
     setAdminUsers(INITIAL_ADMIN_USERS);
+    setVenueMap(DEFAULT_VENUE_MAP);
     try {
       localStorage.removeItem(STORAGE_KEYS.GUESTS);
       localStorage.removeItem(STORAGE_KEYS.TABLES);
       localStorage.removeItem(STORAGE_KEYS.TENTS);
       localStorage.removeItem(STORAGE_KEYS.ACTIVITIES);
       localStorage.removeItem(STORAGE_KEYS.ADMIN_USERS);
+      localStorage.removeItem(STORAGE_KEYS.VENUE_MAP);
     } catch {
       // ignore
     }
@@ -970,11 +1027,15 @@ export default function BajambaAppPage() {
                   guests={guests}
                   tents={tents}
                   tables={tables}
+                  venueMap={venueMap}
                   onAssignTent={handleAssignTent}
                   onSaveTent={handleSaveTent}
                   onDeleteTent={handleDeleteTent}
                   onSaveTable={handleSaveTable}
                   onDeleteTable={handleDeleteTable}
+                  onUpdateTentCoordinates={handleUpdateTentCoordinates}
+                  onSaveVenueMap={handleSaveVenueMap}
+                  onResetVenueMapToDefault={handleResetVenueMapToDefault}
                 />
               )}
 

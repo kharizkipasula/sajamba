@@ -20,14 +20,10 @@ import {
   ArrowUpDown,
   Rows,
   Columns,
-  MapPin,
-  Image as ImageIcon,
 } from 'lucide-react';
-import { Guest, TentBlock, TableItem, VenueMapConfig } from '@/lib/bajamba-data';
+import { Guest, TentBlock, TableItem, VenueMapConfig, DEFAULT_VENUE_MAP } from '@/lib/bajamba-data';
 import TentModal from '@/components/TentModal';
 import TableModal from '@/components/TableModal';
-import VenueMapModal from '@/components/VenueMapModal';
-import InteractiveTentMap from '@/components/InteractiveTentMap';
 
 type TentSortKey = 'table' | 'name' | 'members' | 'ticket';
 type SortDirection = 'asc' | 'desc';
@@ -36,22 +32,22 @@ interface TentMappingViewProps {
   guests: Guest[];
   tents: TentBlock[];
   tables: TableItem[];
-  venueMap: VenueMapConfig;
+  venueMap?: VenueMapConfig;
   onAssignTent: (guestId: string, tentId: string | null, tableId: number | null) => void;
   onSaveTent: (tentData: Omit<TentBlock, 'id' | 'tableIds'>, existingId?: string) => void;
   onDeleteTent: (tentId: string) => void;
   onSaveTable: (tableData: Omit<TableItem, 'id'>, existingId?: number) => void;
   onDeleteTable: (tableId: number) => void;
-  onUpdateTentCoordinates: (tentId: string, coords: { x: number; y: number }) => void;
-  onSaveVenueMap: (mapConfig: VenueMapConfig) => void;
-  onResetVenueMapToDefault: () => void;
+  onUpdateTentCoordinates?: (tentId: string, coords: { x: number; y: number }) => void;
+  onSaveVenueMap?: (mapConfig: VenueMapConfig) => void;
+  onResetVenueMapToDefault?: () => void;
 }
 
 export default function TentMappingView({
   guests,
   tents,
   tables,
-  venueMap,
+  venueMap = DEFAULT_VENUE_MAP,
   onAssignTent,
   onSaveTent,
   onDeleteTent,
@@ -61,9 +57,8 @@ export default function TentMappingView({
   onSaveVenueMap,
   onResetVenueMapToDefault,
 }: TentMappingViewProps) {
-  // Layout view mode: 'map' (Denah Interaktif), 'full' (Kartu Penuh 100%), or 'grid' (2 Kolom)
-  const [viewLayout, setViewLayout] = useState<'map' | 'full' | 'grid'>('map');
-  const [isVenueMapModalOpen, setIsVenueMapModalOpen] = useState(false);
+  // Layout view mode: 'full' (Kartu Penuh 100%) or 'grid' (2 Kolom)
+  const [viewLayout, setViewLayout] = useState<'full' | 'grid'>('full');
 
   // Drag & drop state
   const [draggedGuestId, setDraggedGuestId] = useState<string | null>(null);
@@ -191,7 +186,7 @@ export default function TentMappingView({
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-[#6355E5] mb-1">
-            <span>Denah Tata Ruang Makan Bajamba Sawahlunto</span>
+            <span>Tata Letak Blok Tenda & Meja Jamba</span>
             <span aria-hidden="true">·</span>
             <span>{tents.length} Blok Tenda Adat</span>
             <span aria-hidden="true">·</span>
@@ -225,17 +220,8 @@ export default function TentMappingView({
             </div>
           </div>
 
-          {/* Tombol Aksi Denah & Tenda */}
+          {/* Tombol Tambah Tenda */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsVenueMapModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs font-bold text-[#1E194D] hover:bg-slate-50 hover:border-slate-300 transition-all shadow-xs"
-            >
-              <ImageIcon className="h-4 w-4 text-[#6355E5]" />
-              <span>Unggah / Atur Denah</span>
-            </button>
-
             <button
               type="button"
               onClick={handleOpenAddTent}
@@ -592,23 +578,10 @@ export default function TentMappingView({
             </div>
           </div>
 
-          {/* Switcher Tampilan: Denah Interaktif vs Kartu Penuh vs Grid 2 Kolom */}
+          {/* Switcher Tampilan: Kartu Penuh vs Grid 2 Kolom */}
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <span className="text-xs text-slate-500 font-medium hidden md:inline">Tampilan:</span>
             <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200/80">
-              <button
-                type="button"
-                onClick={() => setViewLayout('map')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  viewLayout === 'map'
-                    ? 'bg-white text-[#6355E5] shadow-xs'
-                    : 'text-slate-600 hover:text-[#1E194D]'
-                }`}
-                title="Tampilan Denah Visual Interaktif (Gambar Denah Venue & Pin Marker Tenda)"
-              >
-                <MapPin className="h-3.5 w-3.5 text-[#F59E0B]" />
-                <span>Denah Interaktif</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setViewLayout('full')}
@@ -639,22 +612,8 @@ export default function TentMappingView({
           </div>
         </div>
 
-        {/* Tampilan Denah Visual Interaktif ATAU Kartu Daftar Blok Tenda */}
-        {viewLayout === 'map' ? (
-          <InteractiveTentMap
-            venueMap={venueMap}
-            tents={tents}
-            tables={tables}
-            guests={guests}
-            onUpdateTentCoordinates={onUpdateTentCoordinates}
-            onOpenEditTent={(tent) => {
-              setEditingTent(tent);
-              setIsTentModalOpen(true);
-            }}
-            onOpenMapSettings={() => setIsVenueMapModalOpen(true)}
-          />
-        ) : (
-          <div className={viewLayout === 'full' ? 'space-y-6' : 'grid grid-cols-1 md:grid-cols-2 gap-5'}>
+        {/* Kartu Daftar Blok Tenda & Meja Jamba */}
+        <div className={viewLayout === 'full' ? 'space-y-6' : 'grid grid-cols-1 md:grid-cols-2 gap-5'}>
             {tents.map((tent) => {
             const assignedToThisTent = activeGuests.filter((g) => g.tentId === tent.id);
             const occupiedSeats = assignedToThisTent.reduce((acc, g) => acc + g.membersCount, 0);
@@ -1536,20 +1495,11 @@ export default function TentMappingView({
               );
             })}
           </div>
-        )}
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL CRUD TENDA, MEJA & DENAH LOKASI */}
+      {/* MODAL CRUD TENDA & MEJA */}
       {/* ========================================================================= */}
-      <VenueMapModal
-        isOpen={isVenueMapModalOpen}
-        currentMap={venueMap}
-        onClose={() => setIsVenueMapModalOpen(false)}
-        onSaveMap={onSaveVenueMap}
-        onResetToDefault={onResetVenueMapToDefault}
-      />
-
       <TentModal
         isOpen={isTentModalOpen}
         onClose={() => {

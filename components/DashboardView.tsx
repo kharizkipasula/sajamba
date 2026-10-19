@@ -272,7 +272,7 @@ export default function DashboardView({
             onClick={() => onNavigate('tents')}
             className="text-xs font-bold text-[#6355E5] hover:underline"
           >
-            Buka Denah Lengkap →
+            Buka Pemetaan Tenda →
           </button>
         </div>
 
